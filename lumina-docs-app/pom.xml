@@ -23,6 +23,17 @@
             <artifactId>lumina-rag-core</artifactId>
             <version>${project.version}</version>
         </dependency>
+
+        <!-- 引入 LangChain4j 的 OpenAI 协议适配器 Starter (用来对接智谱 GLM-4) -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+        </dependency>
     </dependencies>
 
 </project>
