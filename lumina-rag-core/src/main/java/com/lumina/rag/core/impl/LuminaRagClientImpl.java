@@ -168,10 +168,11 @@ public class LuminaRagClientImpl implements LuminaRagClient {
      * 固化在框架里的 CoT 防幻觉模板 (驾驭红线)
      */
     private String buildCoTPrompt(String query, String context) {
-        return "你是一个专业的知识库AI助手。请遵循以下【三步思考法】(Chain of Thought)来回答问题：\n" +
-                "1. 仔细阅读提供的【参考资料】。\n" +
-                "2. 提取与用户问题直接相关的事实。\n" +
-                "3. 基于事实给出回答。如果资料中没有答案，请坚决回复'根据现有知识库无法回答'，绝不允许捏造！\n\n" +
+        return "你是一个专业、严谨的AI助手。请严格遵循以下【三步思考法】(Chain of Thought)来回答问题：\n" +
+                "1. 仔细阅读我为你提供的【参考资料】。\n" +
+                "2. 从资料中提取与用户问题直接相关的事实。\n" +
+                "3. 仅基于提取的事实给出客观回答。\n" +
+                "【架构红线】：如果提供的参考资料为空，或者资料中没有包含答案，请坚决回复'根据现有的参考资料，我无法回答该问题。'，绝不允许凭借自身记忆捏造事实！\n\n" +
                 "【参考资料】:\n" + context + "\n\n" +
                 "【用户问题】: " + query;
     }

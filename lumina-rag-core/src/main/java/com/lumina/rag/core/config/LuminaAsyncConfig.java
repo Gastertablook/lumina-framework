@@ -20,7 +20,7 @@ public class LuminaAsyncConfig {
 
     @Bean(name = RAG_EXECUTOR_NAME)
     public Executor luminaRagExecutor() {
-        log.info("🚀 [驾驭层] 初始化 Lumina RAG 专属异步线程池...");
+        log.info("[驾驭层] 初始化 Lumina RAG 专属异步线程池...");
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         // 核心线程数：应对日常对话
         executor.setCorePoolSize(20);
