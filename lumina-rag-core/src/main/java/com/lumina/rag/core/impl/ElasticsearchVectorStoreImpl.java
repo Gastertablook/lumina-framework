@@ -95,9 +95,17 @@ public class ElasticsearchVectorStoreImpl implements VectorStoreService {
                 .withQuery(QueryBuilders.functionScoreQuery(boolQuery, scriptScoreFunctionBuilder))
                 .withPageable(PageRequest.of(0, topK))
                 .build();
-
-        // 核心执行：指明动态索引名 IndexCoordinates，并用 EsDocDto 接管返回数据
-        SearchHits<EsDocDto> searchHits = elasticsearchRestTemplate.search(searchQuery, EsDocDto.class, IndexCoordinates.of(indexName));
+        
+        SearchHits<EsDocDto> searchHits;
+        try {
+            searchHits = elasticsearchRestTemplate.search(searchQuery, EsDocDto.class, IndexCoordinates.of(indexName));
+        } catch (org.springframework.data.elasticsearch.NoSuchIndexException e) {
+            log.warn("🛡️ [驾驭层] 检索空间/索引 [{}] 尚未创建或为空，触发优雅降级，返回空检索结果。", indexName);
+            return Collections.emptyList();
+        } catch (Exception e) {
+            log.error("混合检索发生未知异常", e);
+            return Collections.emptyList();
+        }
 
         // 重新打包为极其干净的 DocumentChunk 标准件返回
         List<DocumentChunk> result = new ArrayList<>();
