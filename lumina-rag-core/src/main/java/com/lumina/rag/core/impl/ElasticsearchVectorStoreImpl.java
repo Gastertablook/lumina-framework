@@ -55,28 +55,50 @@ public class ElasticsearchVectorStoreImpl implements VectorStoreService {
     @Override
     public void saveChunks(String indexName, List<DocumentChunk> chunks) {
         // 批量保存入 ES 的逻辑（使用 chunks 的数据）
-        log.info("🚀 [驾驭层] 开始向动态索引 [{}] 写入 {} 条 DocumentChunk", indexName, chunks.size());
+        log.info("[驾驭层] 开始向动态索引 [{}] 写入 {} 条 DocumentChunk", indexName, chunks.size());
+
+        // ==========================================
+        // 【驾驭工程：基建自动化】强制接管并约束底层向量数据结构！
+        // 绝对不允许 ES 瞎猜类型，必须是 dense_vector 和 ik_max_word！
+        // ==========================================
+        org.springframework.data.elasticsearch.core.IndexOperations indexOps = elasticsearchRestTemplate.indexOps(IndexCoordinates.of(indexName));
+        if (!indexOps.exists()) {
+            log.info("发现新索引 [{}]，正在执行自动化基建 (创建索引与稠密向量映射)...", indexName);
+            indexOps.create();
+            // 强制规定 vector 为 384 维余弦相似度稠密向量，text 使用 IK 分词器！
+            String mapping = "{\"properties\":{\"vector\":{\"type\":\"dense_vector\",\"dims\":384,\"index\":true,\"similarity\":\"cosine\"},\"text\":{\"type\":\"text\",\"analyzer\":\"ik_max_word\"}}}";
+            // 注意：这里使用全限定类名，防止与 LangChain4j 的 Document 冲突
+            indexOps.putMapping(org.springframework.data.elasticsearch.core.document.Document.parse(mapping));
+            log.info("索引 [{}] 物理骨架搭建完毕！", indexName);
+        }
 
         List<IndexQuery> queries = chunks.stream().map(chunk -> {
             EsDocDto dto = new EsDocDto(chunk.getChunkId(), chunk.getText(), chunk.getVector(), chunk.getMetadata());
             return new IndexQueryBuilder()
                     .withId(chunk.getChunkId())
-                    .withObject(dto) // 利用 Spring Data ES 的自动序列化
+                    .withObject(dto)
                     .build();
         }).collect(Collectors.toList());
 
-        // 使用 IndexCoordinates 实现动态索引名写入
         elasticsearchRestTemplate.bulkIndex(queries, IndexCoordinates.of(indexName));
-        log.info("✅ [驾驭层] 动态索引 [{}] 写入完成！", indexName);
+        log.info("[驾驭层] 动态索引 [{}] 数据灌入完成！", indexName);
     }
 
     @Override
     public List<DocumentChunk> hybridSearch(String indexName, String queryText, List<Float> queryVector, Map<String, Object> filterConditions, int topK) {
         log.info("触发 Lumina 混合双引擎检索, Index: {}, Query: {}", indexName, queryText);
 
-        // 1. 词法防线 （Operator.AND，绝不允许跨界幻觉）
+//        // 1. 词法防线 （Operator.AND，绝不允许跨界幻觉）
+//        BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
+//        boolQuery.must(QueryBuilders.matchQuery("text", queryText).operator(org.elasticsearch.index.query.Operator.AND));
+
+        // ==========================
+        // 第一重锁：词法防线
+        // 【架构修正】：因为目前未接入 Agent 意图提取，用户传入的是长问句，
+        // 包含“谁”、“什么”等干扰词，强用 AND 会导致 0 召回。改为默认的 OR 匹配，让向量算分来定胜负！
+        // ==========================
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-        boolQuery.must(QueryBuilders.matchQuery("text", queryText).operator(org.elasticsearch.index.query.Operator.AND));
+        boolQuery.must(QueryBuilders.matchQuery("text", queryText)); // 去掉了 .operator(Operator.AND)
 
         // 2. 权限/元数据硬过滤 (驾驭约束：动态剥离越权操作，确保不越权)
         if (filterConditions != null && !filterConditions.isEmpty()) {
@@ -95,12 +117,12 @@ public class ElasticsearchVectorStoreImpl implements VectorStoreService {
                 .withQuery(QueryBuilders.functionScoreQuery(boolQuery, scriptScoreFunctionBuilder))
                 .withPageable(PageRequest.of(0, topK))
                 .build();
-        
+
         SearchHits<EsDocDto> searchHits;
         try {
             searchHits = elasticsearchRestTemplate.search(searchQuery, EsDocDto.class, IndexCoordinates.of(indexName));
         } catch (org.springframework.data.elasticsearch.NoSuchIndexException e) {
-            log.warn("🛡️ [驾驭层] 检索空间/索引 [{}] 尚未创建或为空，触发优雅降级，返回空检索结果。", indexName);
+            log.warn("🛡[驾驭层] 检索空间/索引 [{}] 尚未创建或为空，触发优雅降级，返回空检索结果。", indexName);
             return Collections.emptyList();
         } catch (Exception e) {
             log.error("混合检索发生未知异常", e);
