@@ -59,7 +59,7 @@ public class LuminaRagClientImpl implements LuminaRagClient {
     }
 
     @Override
-    public SseEmitter chatStream(String query, String sessionId, Map<String, Object> constraints) {
+    public SseEmitter chatStream(String query, String sessionId, String indexName, Map<String, Object> metadataFilters) {
         // 创建 SSE 发射器 (超时设为 0，防止大模型思考过久断开)
         SseEmitter emitter = new SseEmitter(0L);
 
@@ -91,16 +91,15 @@ public class LuminaRagClientImpl implements LuminaRagClient {
                 // 4. 触发 Singleflight 并发护城河！
                 String finalAnswer = deduplicator.execute(deduplicationKey, () -> {
                     isPioneer.set(true);
-                    log.info("🚀 [驾驭层] 护城河放行先锋请求，开始真实检索与生成: {}", query);
+                    log.info("[驾驭层] 护城河放行先锋请求，开始真实检索与生成: {}", query);
 
                     // TODO: 【里程碑三/四扩展点】接入双层 LLM 与 Agent 意图识别
                     // String intent = agentRouter.extractIntent(query);
                     // if(intent.equals("summary")) { ...走长文档总结逻辑... }
 
                     // A. 执行终极混合检索
-                    String indexName = (String) constraints.getOrDefault("indexName", "default_workspace");
                     List<DocumentChunk> chunks = vectorStoreService.hybridSearch(
-                            indexName, query, queryVector, constraints, 3);
+                            indexName, query, queryVector, metadataFilters, 3);
 
                     List<String> refDocIds = chunks.stream().map(DocumentChunk::getChunkId).collect(Collectors.toList());
 
@@ -152,7 +151,7 @@ public class LuminaRagClientImpl implements LuminaRagClient {
 
                 // 5. 【跟随者收割逻辑】
                 if (!isPioneer.get()) {
-                    log.info("🛡️ [驾驭层] 护城河拦截成功，跟随者醒来，直接下发复用成果: {}", query);
+                    log.info("[驾驭层] 护城河拦截成功，跟随者醒来，直接下发复用成果: {}", query);
                     sendCacheToSse(emitter, finalAnswer);
                 }
             } catch (Exception e) {

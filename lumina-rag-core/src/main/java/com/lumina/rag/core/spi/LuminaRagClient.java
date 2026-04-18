@@ -14,9 +14,15 @@ public interface LuminaRagClient {
      *
      * @param query 用户提问
      * @param sessionId 会话ID (用于长文本多轮对话隔离)
-     * @param constraints 驾驭约束参数 (如: {"userId": "1001", "docIds":["pdf_1", "pdf_2"]})
+     * @param indexName 指定搜对应库名
+     * @param metadataFilters 驾驭约束参数 (如: {"userId": "1001", "docIds":["pdf_1", "pdf_2"]})
      *                    通过这些约束，底层检索时绝对不会发生数据越权。
      * @return SSE 打字机推流
      */
-    SseEmitter chatStream(String query, String sessionId, Map<String, Object> constraints);
+    SseEmitter chatStream(
+            String query,
+            String sessionId,
+            String indexName,
+            Map<String, Object> metadataFilters
+    );
 }
