@@ -44,9 +44,9 @@ public class SemanticCacheManager {
     /**
      * 核心操作 1：获取缓存 (按照 L1 -> L2 的顺序)
      */
-    public String getCache(String queryText, List<Float> queryVector) {
+    public String getCache(String indexName, String queryText, List<Float> queryVector) {
         // 1. L1 Redis 缓存 (精准匹配，防爆刷)
-        String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex(queryText.getBytes(StandardCharsets.UTF_8));
+        String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
         String l1Result = stringRedisTemplate.opsForValue().get(md5Key);
         if (l1Result != null) {
             log.info("L1 Redis Cache 命中! 耗时约 7ms. Query: {}", queryText);
@@ -55,7 +55,7 @@ public class SemanticCacheManager {
 
         // 2. L2 ES 语义缓存 (混合检索：IK 分词兜底 + 向量算分)
         if (queryVector != null && !queryVector.isEmpty()) {
-            String l2Result = checkL2SemanticCache(queryText, queryVector);
+            String l2Result = checkL2SemanticCache(indexName, queryText, queryVector);
             if (l2Result != null) {
                 log.info("L2 ES Semantic Cache 命中! 耗时约 50ms. Query: {}", queryText);
                 // 驾驭升维：将 L2 命中的结果写回 L1，让下一次相同的提问加速！
@@ -70,13 +70,14 @@ public class SemanticCacheManager {
     /**
      * 核心操作 2：保存缓存 (回答生成后，写入 L1 和 L2)
      */
-    public void putCache(String queryText, List<Float> queryVector, String llmResponse, List<String> refDocIds) {
+    public void putCache(String indexName, String queryText, List<Float> queryVector, String llmResponse, List<String> refDocIds) {
         // 写入 L1
-        String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex(queryText.getBytes(StandardCharsets.UTF_8));
+        String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
         stringRedisTemplate.opsForValue().set(md5Key, llmResponse, 24, TimeUnit.HOURS);
 
         // 写入 L2
         SemanticCacheEntity entity = SemanticCacheEntity.builder()
+                .indexName(indexName)
                 .queryText(queryText)
                 .queryVector(queryVector)
                 .llmResponse(llmResponse)
@@ -90,12 +91,14 @@ public class SemanticCacheManager {
     /**
      * 内部方法：执行 ES 混合检索查询 L2 缓存
      */
-    private String checkL2SemanticCache(String queryText, List<Float> queryVector) {
+    private String checkL2SemanticCache(String indexName, String queryText, List<Float> queryVector) {
         try {
             // 构建词法防线 (IK分词，至少要包含核心词，防止向量过度联想)
             BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
             boolQuery.must(QueryBuilders.matchQuery("queryText", queryText)
                     .minimumShouldMatch("60%")); // 驾驭约束：分词重合度 > 60%
+            // L2 查询时强制过滤 indexName
+            boolQuery.filter(QueryBuilders.termQuery("indexName", indexName));
 
             // 构建语义算分 (Painless Script)
             Map<String, Object> params = Collections.singletonMap("query_vector", queryVector);

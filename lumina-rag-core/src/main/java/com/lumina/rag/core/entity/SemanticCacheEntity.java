@@ -33,11 +33,15 @@ public class SemanticCacheEntity {
     @Field(type = FieldType.Text, index = false)
     private String llmResponse;
 
-    // 【核心改动】：原先的 refProductIds 改为泛化的文档片段 IDs
+    // 泛化的文档片段 IDs
     // 用于 Kafka 监听到某个文档/PDF更新时，顺藤摸瓜炸毁缓存
     @Field(type = FieldType.Keyword)
     private List<String> refDocIds;
 
     @Field(type = FieldType.Long)
     private Long createTime;
+
+    // 租户隔离字段，防止不同知识库的缓存串库
+    @Field(type = FieldType.Keyword)
+    private String indexName;
 }

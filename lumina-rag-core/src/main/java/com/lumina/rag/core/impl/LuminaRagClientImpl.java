@@ -79,7 +79,7 @@ public class LuminaRagClientImpl implements LuminaRagClient {
         }
 
         // 尝试从 L1/L2 多级缓存获取
-        String cachedResponse = cacheManager.getCache(query, queryVector);
+        String cachedResponse = cacheManager.getCache(indexName, query, queryVector);
         if (cachedResponse != null) {
             log.info("[驾驭层] 多级缓存命中，直接使用静态 SSE 推流返回");
             sendCacheToSse(emitter, cachedResponse);
@@ -139,7 +139,7 @@ public class LuminaRagClientImpl implements LuminaRagClient {
 
                                 // 这里的 sessionRefDocIds 已经被内部 Tool 在后台悄悄填满了！神不知鬼不觉！
 
-                                cacheManager.putCache(query, queryVector, fullResponse.toString(), sessionRefDocIds);
+                                cacheManager.putCache(indexName, query, queryVector, fullResponse.toString(), sessionRefDocIds);
 
                                 llmFuture.complete(fullResponse.toString());
                             })
