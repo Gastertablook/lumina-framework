@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class KnowledgeBaseService {
 
-    // 【核心】：仅仅注入我们在轮子里造好的摄入引擎 SPI
+    // 【核心】：仅仅注入在轮子里造好的摄入引擎 SPI
     private final DocumentIngestionEngine documentIngestionEngine;
 
     public String ingestText(String sourceName, String text, String indexName) {
