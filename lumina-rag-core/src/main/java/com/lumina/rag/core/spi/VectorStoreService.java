@@ -30,4 +30,7 @@ public interface VectorStoreService {
             Map<String, Object> filterConditions,
             int topK
     );
+
+    // 根据父文档 ID 删除所有底层碎片
+    void deleteChunksByParentId(String indexName, String parentId);
 }

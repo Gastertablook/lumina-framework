@@ -136,4 +136,13 @@ public class ElasticsearchVectorStoreImpl implements VectorStoreService {
 
         return result;
     }
+
+    @Override
+    public void deleteChunksByParentId(String indexName, String parentId) {
+        NativeSearchQuery deleteQuery = new NativeSearchQueryBuilder()
+                .withQuery(QueryBuilders.termQuery("metadata.parentId", parentId))
+                .build();
+        elasticsearchRestTemplate.delete(deleteQuery, EsDocDto.class, IndexCoordinates.of(indexName));
+        log.info("[驾驭层] 已从索引 [{}] 中物理删除关联 ParentID [{}] 的所有文档碎片！", indexName, parentId);
+    }
 }
