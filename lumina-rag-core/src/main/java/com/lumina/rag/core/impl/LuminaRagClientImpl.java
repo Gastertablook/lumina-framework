@@ -120,9 +120,15 @@ public class LuminaRagClientImpl implements LuminaRagClient {
                     CompletableFuture<String> llmFuture = new CompletableFuture<>();
                     StringBuilder fullResponse = new StringBuilder();
 
+                    // ==========================================
+                    // 【驾驭工程：隐式指令包裹 (Prompt Wrapping)】
+                    // 用户只管问业务，我们在底层偷偷给大模型施加高压指令！
+                    // ==========================================
+                    String wrappedQuery = query + "\n\n(系统隐式指令：如果这是一个业务/事实问题，你必须且只能调用工具，提取核心实体名词进行检索！不要输出任何多余解释！)";
+
                     // 【高潮】：不再手写查库逻辑，直接呼叫大脑！
                     // 大脑会自动去调 Tool，自动把长上下文塞进 prompt，最后流式返回给我们！
-                    sessionBrain.chat(sessionId, query)
+                    sessionBrain.chat(sessionId, wrappedQuery)
                             .onNext(token -> {
                                 try {
                                     emitter.send(SseEmitter.event().data(token));
