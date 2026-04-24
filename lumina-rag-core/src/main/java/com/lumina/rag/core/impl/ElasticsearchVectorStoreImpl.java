@@ -88,9 +88,9 @@ public class ElasticsearchVectorStoreImpl implements VectorStoreService {
     public List<DocumentChunk> hybridSearch(String indexName, String queryText, List<Float> queryVector, Map<String, Object> filterConditions, int topK) {
         log.info("触发 Lumina 混合双引擎检索, Index: {}, Query: {}", indexName, queryText);
 
-        // 1. 词法防线 （因为 Agent 已经帮我们提炼了纯净的核心词，所以用 Operator.AND ，绝不允许跨界幻觉）
+        // 1. 词法防线 （依靠大模型提取的高质量关键词进行默认 OR 匹配，彻底把“语义判断”的权力交还给下方的 HNSW 向量余弦算分引擎！）
         BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-        boolQuery.must(QueryBuilders.matchQuery("text", queryText).operator(org.elasticsearch.index.query.Operator.AND));
+        boolQuery.must(QueryBuilders.matchQuery("text", queryText));
 
         // 2. 权限/元数据硬过滤 (驾驭约束：动态剥离越权操作，确保不越权)
         if (filterConditions != null && !filterConditions.isEmpty()) {

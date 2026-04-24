@@ -31,11 +31,10 @@ public class InformationRetrievalTool {
     private final List<String> refDocIds; // 引用传递，用于向外挂网关回写血缘！
 
     /**
-     * 【神级注解 @Tool】：
-     * 这段中文不仅是给开发者看的，更是发给大模型看的！
-     * 大模型会通过这段描述，自己决定什么时候该触发这个 Java 方法，以及怎么从用户口语里提取精简的 keyword 参数！
+     * 【驾驭工程：实体抽取指令】
+     * 强迫大模型将自然语言转化为标准的搜索引擎 Keyword 格式！
      */
-    @Tool("当你需要获取外部参考资料、私有数据、业务线索或长文本上下文时，必须调用此检索工具。请传入精简提炼后的核心搜索词（keyword）。")
+    @Tool("取外部参考资料的唯一检索工具。请提取问题中的核心实体名词，并【仅】以空格分隔的形式传入参数（格式示例：实体A 实体B 核心概念C）。")
     public String retrieveInformation(String keyword) {
         log.info("[Agent 大脑决断] 触发底层数据检索工具，大模型提取的检索词为: [{}]", keyword);
 
