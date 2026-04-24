@@ -151,7 +151,8 @@ public class SemanticCacheManager {
 
                 // 炸毁 L1 Redis 缓存 (必须根据 queryText 重新计算 MD5 才能找到 Key)
                 String queryText = entity.getQueryText();
-                String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex(queryText.getBytes(StandardCharsets.UTF_8));
+                String indexName = entity.getIndexName();
+                String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
                 Boolean deleted = stringRedisTemplate.delete(md5Key);
                 log.info("已物理炸毁 L1 Redis 缓存, Key: {}, 状态: {}", md5Key, deleted);
 
