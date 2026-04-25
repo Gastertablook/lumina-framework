@@ -34,9 +34,11 @@ public class InformationRetrievalTool {
      * 【驾驭工程：实体抽取指令】
      * 强迫大模型将自然语言转化为标准的搜索引擎 Keyword 格式！
      */
-    @Tool("取外部参考资料的唯一检索工具。请提取问题中的核心实体名词，并【仅】以空格分隔的形式传入参数（格式示例：实体A 实体B 核心概念C）。")
-    public String retrieveInformation(String keyword) {
-        log.info("[Agent 大脑决断] 触发底层数据检索工具，大模型提取的检索词为: [{}]", keyword);
+    @Tool("【强制调用】当用户询问客观事实或查阅资料时，必须调用此工具！参数要求：" +
+            "1. keyword 提取核心名词（空格分隔）；" +
+            "2. needLongContext：如果问题需要宏观总结、对比分析，设为 true；如果是查找特定名字、数值等细节，设为 false。")
+    public String retrieveInformation(String keyword, boolean needLongContext) {
+        log.info("[Agent 大脑决断] 触发底层数据检索工具，大模型提取的检索词为: [{}], 是否拉取巨型长文: [{}]", keyword, needLongContext);
 
         try {
             // 向量化大模型提炼的关键词
@@ -65,7 +67,10 @@ public class InformationRetrievalTool {
                 this.refDocIds.addAll(parentIds);
             }
 
-            if (!parentIds.isEmpty()) {
+            //用来接住长文本或短切片
+            String retrievedData;
+
+            if (needLongContext && !parentIds.isEmpty()) {
                 log.info("[Agent 工具] 触发 Small-to-Big 溯源...");
                 List<String> parentTexts = new java.util.ArrayList<>();
                 for (String pid : parentIds) {
@@ -74,13 +79,13 @@ public class InformationRetrievalTool {
                         parentTexts.add(parentDoc);
                     }
                 }
-                String massiveContext = String.join("\n\n---\n\n", parentTexts);
-                log.info("[Agent 工具] 成功提取 {} 字的巨量参考资料供大脑分析！", massiveContext.length());
-                // 直接把万字长文当作“工具返回值”扔给大模型大脑！
-                return massiveContext;
+                retrievedData = String.join("\n\n---\n\n", parentTexts);
+                log.info("[Agent 工具] 成功提取 {} 字的巨量参考资料供大脑分析！", retrievedData.length());
             } else {
-                return chunks.stream().map(DocumentChunk::getText).collect(Collectors.joining("\n---\n"));
+                log.info("[Agent 工具] 大模型判定为细节问题，仅使用高精度碎片 (Short RAG)...");
+                retrievedData = chunks.stream().map(DocumentChunk::getText).collect(Collectors.joining("\n---\n"));
             }
+            return retrievedData ;
         } catch (Exception e) {
             log.error("检索工具执行异常", e);
             return "系统异常，无法检索。";
