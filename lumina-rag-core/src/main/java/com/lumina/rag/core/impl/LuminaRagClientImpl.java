@@ -46,6 +46,8 @@ public class LuminaRagClientImpl implements LuminaRagClient {
     private final VectorStoreService vectorStoreService;
     private final StringRedisTemplate stringRedisTemplate;
 
+    private final dev.langchain4j.store.memory.chat.ChatMemoryStore chatMemoryStore;
+
     public LuminaRagClientImpl(
             SemanticCacheManager cacheManager,
             RequestDeduplicator deduplicator,
@@ -53,6 +55,7 @@ public class LuminaRagClientImpl implements LuminaRagClient {
             EmbeddingModel embeddingModel,
             VectorStoreService vectorStoreService,
             StringRedisTemplate stringRedisTemplate,
+            dev.langchain4j.store.memory.chat.ChatMemoryStore chatMemoryStore,
             @Qualifier(LuminaAsyncConfig.RAG_EXECUTOR_NAME) Executor ragExecutor) {
         this.cacheManager = cacheManager;
         this.deduplicator = deduplicator;
@@ -60,6 +63,7 @@ public class LuminaRagClientImpl implements LuminaRagClient {
         this.embeddingModel = embeddingModel;
         this.vectorStoreService = vectorStoreService;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.chatMemoryStore = chatMemoryStore;
         this.ragExecutor = ragExecutor;
     }
 
@@ -83,6 +87,16 @@ public class LuminaRagClientImpl implements LuminaRagClient {
         if (cachedResponse != null) {
             log.info("[驾驭层] 多级缓存命中，直接使用静态 SSE 推流返回");
             sendCacheToSse(emitter, cachedResponse);
+
+            // ==========================================
+            // 【填补记忆黑洞】
+            // 即使是缓存拦截，也必须把对话塞进用户的 Redis 分布式记忆库，保证 Agent 上下文不断层！
+            // ==========================================
+            dev.langchain4j.memory.ChatMemory chatMemory = dev.langchain4j.memory.chat.MessageWindowChatMemory.builder()
+                    .id(sessionId).maxMessages(10).chatMemoryStore(chatMemoryStore).build();
+            chatMemory.add(dev.langchain4j.data.message.UserMessage.from(query));
+            chatMemory.add(dev.langchain4j.data.message.AiMessage.from(cachedResponse));
+
             return emitter;
         }
 
@@ -112,7 +126,12 @@ public class LuminaRagClientImpl implements LuminaRagClient {
                     // 在请求发生的一瞬间，为这个用户秒建一个专属的 Agent 大脑！极度轻量且绝对安全！
                     LuminaAgentBrain sessionBrain = AiServices.builder(LuminaAgentBrain.class)
                             .streamingChatLanguageModel(streamingChatModel)
-                            .chatMemoryProvider(memoryId -> MessageWindowChatMemory.withMaxMessages(10))
+                            // 使用 MessageWindowChatMemory 配合 Redis 存储，实现滑动窗口的分布式漫游！
+                            .chatMemoryProvider(memoryId -> MessageWindowChatMemory.builder()
+                                    .id(memoryId)
+                                    .maxMessages(10) // 只记最近 10 条，防止 Token 撑爆
+                                    .chatMemoryStore(chatMemoryStore) // 强行挂载 Redis 存储引擎！
+                                    .build())
                             .tools(sessionTool) // 把装满参数的专属 Tool 喂给当次大脑！
                             .build();
 
@@ -120,15 +139,9 @@ public class LuminaRagClientImpl implements LuminaRagClient {
                     CompletableFuture<String> llmFuture = new CompletableFuture<>();
                     StringBuilder fullResponse = new StringBuilder();
 
-                    // ==========================================
-                    // 【驾驭工程：隐式指令包裹 (Prompt Wrapping)】
-                    // 用户只管问业务，我们在底层偷偷给大模型施加高压指令！
-                    // ==========================================
-                    String wrappedQuery = query + "\n\n(系统隐式指令：如果这是一个业务/事实问题，你必须且只能调用工具，提取核心实体名词进行检索！不要输出任何多余解释！)";
-
                     // 【高潮】：不再手写查库逻辑，直接呼叫大脑！
                     // 大脑会自动去调 Tool，自动把长上下文塞进 prompt，最后流式返回给我们！
-                    sessionBrain.chat(sessionId, wrappedQuery)
+                    sessionBrain.chat(sessionId, query)
                             .onNext(token -> {
                                 try {
                                     emitter.send(SseEmitter.event().data(token));
@@ -142,10 +155,20 @@ public class LuminaRagClientImpl implements LuminaRagClient {
                                     emitter.send(SseEmitter.event().name("DONE").data("[DONE]"));
                                     emitter.complete();
                                 } catch (Exception e) {}
-
                                 // 这里的 sessionRefDocIds 已经被内部 Tool 在后台悄悄填满了！神不知鬼不觉！
 
-                                cacheManager.putCache(indexName, query, queryVector, fullResponse.toString(), sessionRefDocIds);
+                                // ==========================================
+                                // 【拒绝全局污染 (OOP 闭环)】
+                                // 直接读取 session 专属的血缘列表！
+                                // 只有调用了底层工具、带有硬核血缘的客观知识，才配进入全局缓存！
+                                // 私人闲聊（如“我是小李”）坚决不存，彻底解决串会话 Bug！
+                                // ==========================================
+                                if (sessionRefDocIds != null && !sessionRefDocIds.isEmpty()) {
+                                    cacheManager.putCache(indexName, query, queryVector, fullResponse.toString(), sessionRefDocIds);
+                                    log.info("客观知识生成完毕，已写入全局多级缓存！血缘 Docs: {}", sessionRefDocIds);
+                                } else {
+                                    log.info("识别为纯记忆/闲聊交互，不写入全局客观缓存，避免多租户污染！");
+                                }
 
                                 llmFuture.complete(fullResponse.toString());
                             })
