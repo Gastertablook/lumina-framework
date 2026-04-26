@@ -1,5 +1,6 @@
 package com.lumina.rag.core.agent;
 
+import com.lumina.rag.core.cache.SemanticCacheManager;
 import com.lumina.rag.core.domain.DocumentChunk;
 import com.lumina.rag.core.spi.VectorStoreService;
 import dev.langchain4j.agent.tool.Tool;
@@ -24,6 +25,7 @@ public class InformationRetrievalTool {
     private final VectorStoreService vectorStoreService;
     private final EmbeddingModel embeddingModel;
     private final StringRedisTemplate stringRedisTemplate;
+    private final SemanticCacheManager cacheManager;
 
     // 当前请求独占的参数
     private final String indexName;
@@ -41,15 +43,26 @@ public class InformationRetrievalTool {
         log.info("[Agent 大脑决断] 触发底层数据检索工具，大模型提取的检索词为: [{}], 是否拉取巨型长文: [{}]", keyword, needLongContext);
 
         try {
-            // 向量化大模型提炼的关键词
+            // 1. 向量化大模型提炼的关键词
             List<Float> queryVector = embeddingModel.embed(keyword).content().vectorAsList();
 
-            // 执行精准混合检索
+            // ==========================================
+            // 【工具级语义缓存】
+            // 缓存的 Key 是最纯净的实体关键词！大模型下次只要提取出相似关键词，
+            // 7ms 内直接返回长篇文档，根本不用再去查 ES 和 Redis！
+            // ==========================================
+            String cachedContext = cacheManager.getCache(this.indexName, keyword, queryVector);
+            if (cachedContext != null) {
+                log.info("[工具级缓存] 极速命中！直接返回底层客观知识上下文！");
+                return cachedContext;
+            }
+
+            // 2. 缓存未命中，执行精准混合检索
             List<DocumentChunk> chunks = vectorStoreService.hybridSearch(
                     indexName, keyword, queryVector, this.filters, 3);
 
             if (chunks == null || chunks.isEmpty()) {
-                return "【系统警告】：底层数据引擎未检索到任何信息！你必须立刻停止作答，并原封不动地向用户回复：‘抱歉，当前私有数据空间中没有关于此问题的记载。’ 绝不允许进行任何猜测！";
+                return "【系统警告】：底层数据引擎未检索到任何信息！你必须立刻停止作答，并原封不动地向用户回复：‘抱歉，当前私有数据空间中没有关于此问题的记载。’ ";
             }
 
             // ==========================================
@@ -67,9 +80,8 @@ public class InformationRetrievalTool {
                 this.refDocIds.addAll(parentIds);
             }
 
-            //用来接住长文本或短切片
+            // 3. Small-to-Big 组装上下文
             String retrievedData;
-
             if (needLongContext && !parentIds.isEmpty()) {
                 log.info("[Agent 工具] 触发 Small-to-Big 溯源...");
                 List<String> parentTexts = new java.util.ArrayList<>();
@@ -85,6 +97,13 @@ public class InformationRetrievalTool {
                 log.info("[Agent 工具] 大模型判定为细节问题，仅使用高精度碎片 (Short RAG)...");
                 retrievedData = chunks.stream().map(DocumentChunk::getText).collect(Collectors.joining("\n---\n"));
             }
+
+            // ==========================================
+            // 【写入工具级缓存】
+            // 将纯粹的“事实上下文”写入缓存！
+            // ==========================================
+            cacheManager.putCache(this.indexName, keyword, queryVector, retrievedData, this.refDocIds);
+
             return retrievedData ;
         } catch (Exception e) {
             log.error("检索工具执行异常", e);

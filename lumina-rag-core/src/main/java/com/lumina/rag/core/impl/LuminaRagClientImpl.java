@@ -72,40 +72,12 @@ public class LuminaRagClientImpl implements LuminaRagClient {
         // 创建 SSE 发射器 (超时设为 0，防止大模型思考过久断开)
         SseEmitter emitter = new SseEmitter(0L);
 
-        // 实时计算提问的向量 (0成本毫秒级转换)
-        List<Float> queryVector;
-        try {
-            queryVector = embeddingModel.embed(query).content().vectorAsList();
-        } catch (Exception e) {
-            log.error("Query向量化失败", e);
-            emitter.completeWithError(e);
-            return emitter;
-        }
-
-        // 尝试从 L1/L2 多级缓存获取
-        String cachedResponse = cacheManager.getCache(indexName, query, queryVector);
-        if (cachedResponse != null) {
-            log.info("[驾驭层] 多级缓存命中，直接使用静态 SSE 推流返回");
-            sendCacheToSse(emitter, cachedResponse);
-
-            // ==========================================
-            // 【填补记忆黑洞】
-            // 即使是缓存拦截，也必须把对话塞进用户的 Redis 分布式记忆库，保证 Agent 上下文不断层！
-            // ==========================================
-            dev.langchain4j.memory.ChatMemory chatMemory = dev.langchain4j.memory.chat.MessageWindowChatMemory.builder()
-                    .id(sessionId).maxMessages(10).chatMemoryStore(chatMemoryStore).build();
-            chatMemory.add(dev.langchain4j.data.message.UserMessage.from(query));
-            chatMemory.add(dev.langchain4j.data.message.AiMessage.from(cachedResponse));
-
-            return emitter;
-        }
-
         // 注意：这里由于 SSE 是异步流式的，传统的 CompletableFuture 阻塞式防击穿需要变种。
         // 【架构红线】：必须在这里异步！保证 Tomcat 线程立刻释放，将阻塞风险转移至专属池去跑检索和推流。
         CompletableFuture.runAsync(() -> {
-            // 【架构防线：ConcurrentHashMap 上下文生命周期管理】
             try {
-                String deduplicationKey = "llm_chat:" + DigestUtils.md5DigestAsHex(query.getBytes(StandardCharsets.UTF_8));
+                // 必须绑定 sessionId，防止不同用户卡住对方检索！
+                String deduplicationKey = "llm_chat:" + DigestUtils.md5DigestAsHex((sessionId + ":" + query).getBytes(StandardCharsets.UTF_8));
                 AtomicBoolean isPioneer = new AtomicBoolean(false);
 
                 // 触发 Singleflight 并发护城河！
@@ -115,11 +87,11 @@ public class LuminaRagClientImpl implements LuminaRagClient {
 
                     // ==========================================
                     // 【实例化装配】
-                    // 彻底抛弃全局上下文！把路由参数和空血缘集合，直接当做参数塞进新对象的肚子里！
+                    // 把路由参数和空血缘集合，直接当做参数塞进新对象的肚子里！
                     // ==========================================
                     List<String> sessionRefDocIds = new ArrayList<>();
                     InformationRetrievalTool sessionTool = new InformationRetrievalTool(
-                            vectorStoreService, embeddingModel, stringRedisTemplate,
+                            vectorStoreService, embeddingModel, stringRedisTemplate, cacheManager,
                             indexName, metadataFilters, sessionRefDocIds
                     );
 
@@ -157,19 +129,6 @@ public class LuminaRagClientImpl implements LuminaRagClient {
                                 } catch (Exception e) {}
                                 // 这里的 sessionRefDocIds 已经被内部 Tool 在后台悄悄填满了！神不知鬼不觉！
 
-                                // ==========================================
-                                // 【拒绝全局污染 (OOP 闭环)】
-                                // 直接读取 session 专属的血缘列表！
-                                // 只有调用了底层工具、带有硬核血缘的客观知识，才配进入全局缓存！
-                                // 私人闲聊（如“我是小李”）坚决不存，彻底解决串会话 Bug！
-                                // ==========================================
-                                if (sessionRefDocIds != null && !sessionRefDocIds.isEmpty()) {
-                                    cacheManager.putCache(indexName, query, queryVector, fullResponse.toString(), sessionRefDocIds);
-                                    log.info("客观知识生成完毕，已写入全局多级缓存！血缘 Docs: {}", sessionRefDocIds);
-                                } else {
-                                    log.info("识别为纯记忆/闲聊交互，不写入全局客观缓存，避免多租户污染！");
-                                }
-
                                 llmFuture.complete(fullResponse.toString());
                             })
                             .onError(error -> {
@@ -184,10 +143,8 @@ public class LuminaRagClientImpl implements LuminaRagClient {
                         throw new RuntimeException("Agent 思考执行中断", e);
                     }
                 });
-
-                // 5. 【跟随者收割逻辑】
                 if (!isPioneer.get()) {
-                    log.info("[驾驭层] 护城河拦截成功，跟随者醒来，直接下发复用成果: {}", query);
+                    log.info("[驾驭层] 护城河拦截成功，跟随者醒来，直接下发复用成果!");
                     sendCacheToSse(emitter, finalAnswer);
                 }
             } catch (Exception e) {
@@ -200,9 +157,6 @@ public class LuminaRagClientImpl implements LuminaRagClient {
         return emitter;
     }
 
-    /**
-     * 辅助方法：将命中缓存的整段字符串伪装成流式输出
-     */
     private void sendCacheToSse(SseEmitter emitter, String cachedResponse) {
         try {
             emitter.send(SseEmitter.event().data(cachedResponse));
