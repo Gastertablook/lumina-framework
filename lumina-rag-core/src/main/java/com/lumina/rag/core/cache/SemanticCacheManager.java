@@ -1,5 +1,6 @@
 package com.lumina.rag.core.cache;
 
+import com.lumina.rag.core.constant.LuminaConstants;
 import com.lumina.rag.core.entity.SemanticCacheEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,17 +37,16 @@ public class SemanticCacheManager {
     private final ElasticsearchRestTemplate elasticsearchRestTemplate;
     private final SemanticCacheRepository semanticCacheRepository;
 
-    private static final String L1_CACHE_PREFIX = "lumina:cache:l1:";
-
     // 相似度阈值：向量余弦相似度必须大于 0.85 才能命中 L2 缓存 (防幻觉)
     private static final double SIMILARITY_THRESHOLD = 0.85;
+    private static final String MINIMUM_SHOULD_MATCH = "60%";
 
     /**
      * 核心操作 1：获取缓存 (按照 L1 -> L2 的顺序)
      */
     public String getCache(String indexName, String queryText, List<Float> queryVector) {
         // 1. L1 Redis 缓存 (精准匹配，防爆刷)
-        String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
+        String md5Key = LuminaConstants.L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
         String l1Result = stringRedisTemplate.opsForValue().get(md5Key);
         if (l1Result != null) {
             log.info("L1 Redis Cache 命中! 耗时约 7ms. Query: {}", queryText);
@@ -72,7 +72,7 @@ public class SemanticCacheManager {
      */
     public void putCache(String indexName, String queryText, List<Float> queryVector, String llmResponse, List<String> refDocIds) {
         // 写入 L1
-        String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
+        String md5Key = LuminaConstants.L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
         stringRedisTemplate.opsForValue().set(md5Key, llmResponse, 24, TimeUnit.HOURS);
 
         // 写入 L2
@@ -95,10 +95,10 @@ public class SemanticCacheManager {
         try {
             // 构建词法防线 (IK分词，至少要包含核心词，防止向量过度联想)
             BoolQueryBuilder boolQuery = QueryBuilders.boolQuery();
-            boolQuery.must(QueryBuilders.matchQuery("queryText", queryText)
-                    .minimumShouldMatch("60%")); // 驾驭约束：分词重合度 > 60%
+            boolQuery.must(QueryBuilders.matchQuery(LuminaConstants.FIELD_QUERY_TEXT, queryText)
+                    .minimumShouldMatch(MINIMUM_SHOULD_MATCH)); // 驾驭约束：分词重合度 > 60%
             // L2 查询时强制过滤 indexName
-            boolQuery.filter(QueryBuilders.termQuery("indexName", indexName));
+            boolQuery.filter(QueryBuilders.termQuery(LuminaConstants.FIELD_INDEX_NAME, indexName));
 
             // 构建语义算分 (Painless Script)
             Map<String, Object> params = Collections.singletonMap("query_vector", queryVector);
@@ -152,7 +152,7 @@ public class SemanticCacheManager {
                 // 炸毁 L1 Redis 缓存 (必须根据 queryText 重新计算 MD5 才能找到 Key)
                 String queryText = entity.getQueryText();
                 String indexName = entity.getIndexName();
-                String md5Key = L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
+                String md5Key = LuminaConstants.L1_CACHE_PREFIX + DigestUtils.md5DigestAsHex((indexName + ":" + queryText).getBytes(StandardCharsets.UTF_8));
                 Boolean deleted = stringRedisTemplate.delete(md5Key);
                 log.info("已物理炸毁 L1 Redis 缓存, Key: {}, 状态: {}", md5Key, deleted);
 

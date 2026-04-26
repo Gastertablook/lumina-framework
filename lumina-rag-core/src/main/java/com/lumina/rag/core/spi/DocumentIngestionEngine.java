@@ -11,4 +11,6 @@ public interface DocumentIngestionEngine {
      * @return 返回生成的全局唯一父文档 ID (parentId)
      */
     String ingest(String sourceName, String text, String indexName);
+
+    void deleteParentDoc(String oldParentId);
 }

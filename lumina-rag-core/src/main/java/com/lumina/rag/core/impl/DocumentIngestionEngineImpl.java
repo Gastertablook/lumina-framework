@@ -1,5 +1,6 @@
 package com.lumina.rag.core.impl;
 
+import com.lumina.rag.core.constant.LuminaConstants;
 import com.lumina.rag.core.domain.DocumentChunk;
 import com.lumina.rag.core.spi.DocumentIngestionEngine;
 import com.lumina.rag.core.spi.DocumentSplitterStrategy;
@@ -32,7 +33,7 @@ public class DocumentIngestionEngineImpl implements DocumentIngestionEngine {
         String parentId = "doc_" + UUID.randomUUID().toString();
 
         // 1. 骨架逻辑：框架强行接管父文档存储
-        stringRedisTemplate.opsForValue().set("lumina:parent_doc:" + parentId, text, 30, TimeUnit.DAYS);
+        stringRedisTemplate.opsForValue().set(LuminaConstants.PARENT_DOC_PREFIX + parentId, text, 30, TimeUnit.DAYS);
 
         // 2. 策略委派：调用外部传入的切块策略获取文本碎片
         List<String> textChunks = splitterStrategy.split(text);
@@ -42,7 +43,7 @@ public class DocumentIngestionEngineImpl implements DocumentIngestionEngine {
             List<Float> vector = embeddingModel.embed(chunkText).content().vectorAsList();
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("sourceName", sourceName);
-            metadata.put("parentId", parentId); // 绝对安全的烙印
+            metadata.put(LuminaConstants.FIELD_PARENT_ID, parentId); // 绝对安全的烙印
             return DocumentChunk.builder()
                     .chunkId(UUID.randomUUID().toString())
                     .text(chunkText)
@@ -53,5 +54,10 @@ public class DocumentIngestionEngineImpl implements DocumentIngestionEngine {
 
         vectorStoreService.saveChunks(indexName, chunks);
         return parentId;
+    }
+
+    @Override
+    public void deleteParentDoc(String parentId) {
+        stringRedisTemplate.delete(LuminaConstants.PARENT_DOC_PREFIX + parentId);
     }
 }

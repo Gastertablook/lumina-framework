@@ -12,10 +12,8 @@ public interface LuminaConstants {
     // ================== 系统路由默认值 ==================
     String DEFAULT_INDEX_NAME = "default_workspace";
 
-    // ================== Kafka Topic ==================
-    String TOPIC_DOC_UPDATE = "doc_update_topic";
-
     // ================== ES 实体字段名 (防拼写错误) ==================
     String FIELD_PARENT_ID = "parentId";
     String FIELD_INDEX_NAME = "indexName";
+    String FIELD_QUERY_TEXT = "queryText";
 }

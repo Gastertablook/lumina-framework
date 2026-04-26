@@ -17,9 +17,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Date;
 
-import static com.lumina.rag.core.constant.LuminaConstants.PARENT_DOC_PREFIX;
-import static com.lumina.rag.core.constant.LuminaConstants.TOPIC_DOC_UPDATE;
-
 /**
  * 业务层知识库服务
  * 现在它薄得像一张纸，所有的脏活累活全被底层轮子 (DocumentIngestionEngine) 包揽了！
@@ -36,6 +33,7 @@ public class KnowledgeBaseService {
 
     private final KbDocumentMapper kbDocumentMapper;
 
+    private static final String TOPIC_DOC_UPDATE = "doc_update_topic";
 
     /**
      * 业务操作：纯文本上传入库
@@ -106,7 +104,7 @@ public class KnowledgeBaseService {
 
         // 2. 底层物理大清洗 (ES 碎片与 Redis 父文档)
         vectorStoreService.deleteChunksByParentId(indexName, oldParentId);
-        stringRedisTemplate.delete(PARENT_DOC_PREFIX + oldParentId);
+        documentIngestionEngine.deleteParentDoc(oldParentId);
 
         // 3. 触发 Kafka 广播清理 AI 缓存
         log.info("业务层发送 Kafka 消息，通知全网清理 oldParentId: {} 的 AI 缓存", oldParentId);

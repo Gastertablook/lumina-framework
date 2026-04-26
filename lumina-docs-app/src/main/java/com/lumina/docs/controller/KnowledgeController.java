@@ -1,6 +1,7 @@
 package com.lumina.docs.controller;
 
 import com.lumina.docs.service.KnowledgeBaseService;
+import com.lumina.rag.core.constant.LuminaConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,7 +19,7 @@ public class KnowledgeController {
     @PostMapping("/upload-file")
     public String uploadFile(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(defaultValue = "default_workspace") String indexName) {
+            @RequestParam(defaultValue = LuminaConstants.DEFAULT_INDEX_NAME) String indexName) {
 
         String parentId = knowledgeBaseService.ingestFile(file, indexName);
         return "SUCCESS: 物理文件 [" + file.getOriginalFilename() + "] 已解析并落盘 MySQL！全局唯一ID: " + parentId;
@@ -28,7 +29,7 @@ public class KnowledgeController {
     public String uploadText(
             @RequestParam String sourceName,
             @RequestBody String text,
-            @RequestParam(defaultValue = "default_workspace") String indexName) {
+            @RequestParam(defaultValue = LuminaConstants.DEFAULT_INDEX_NAME) String indexName) {
 
         // 拿到底层引擎生成的血缘 ID
         String parentId = knowledgeBaseService.ingestText(sourceName, text, indexName);
@@ -40,7 +41,7 @@ public class KnowledgeController {
     public String updateDoc(
             @RequestParam String oldDocId,
             @RequestBody String newText,
-            @RequestParam(defaultValue = "default_workspace") String indexName) {
+            @RequestParam(defaultValue = LuminaConstants.DEFAULT_INDEX_NAME) String indexName) {
 
         // 业务编排全部交由 Service 执行
         String newParentId = knowledgeBaseService.updateDocument(oldDocId, newText, indexName);

@@ -1,6 +1,7 @@
 package com.lumina.rag.core.agent;
 
 import com.lumina.rag.core.cache.SemanticCacheManager;
+import com.lumina.rag.core.constant.LuminaConstants;
 import com.lumina.rag.core.domain.DocumentChunk;
 import com.lumina.rag.core.spi.VectorStoreService;
 import dev.langchain4j.agent.tool.Tool;
@@ -69,7 +70,7 @@ public class InformationRetrievalTool {
             // 【Small-to-Big 长上下文溯源】
             // ==========================================
             Set<String> parentIds = chunks.stream()
-                    .map(chunk -> (String) chunk.getMetadata().get("parentId"))
+                    .map(chunk -> (String) chunk.getMetadata().get(LuminaConstants.FIELD_PARENT_ID))
                     .filter(java.util.Objects::nonNull)
                     .collect(Collectors.toSet());
 
@@ -86,7 +87,7 @@ public class InformationRetrievalTool {
                 log.info("[Agent 工具] 触发 Small-to-Big 溯源...");
                 List<String> parentTexts = new java.util.ArrayList<>();
                 for (String pid : parentIds) {
-                    String parentDoc = stringRedisTemplate.opsForValue().get("lumina:parent_doc:" + pid);
+                    String parentDoc = stringRedisTemplate.opsForValue().get(LuminaConstants.PARENT_DOC_PREFIX + pid);
                     if (parentDoc != null) {
                         parentTexts.add(parentDoc);
                     }
