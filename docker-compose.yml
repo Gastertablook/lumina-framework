@@ -43,6 +43,18 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
+  mysql:
+    image: mysql:8.0
+    container_name: lumina-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: lumina_kb
+    volumes:
+      - mysql_data:/var/lib/mysql
+
 volumes:
   es_data:
   redis_data:
+  mysql_data:
