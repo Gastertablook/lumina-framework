@@ -60,4 +60,13 @@ public class DocumentIngestionEngineImpl implements DocumentIngestionEngine {
     public void deleteParentDoc(String parentId) {
         stringRedisTemplate.delete(LuminaConstants.PARENT_DOC_PREFIX + parentId);
     }
+
+    @Override
+    public void removeDocument(String indexName, String parentId) {
+        log.info("[驾驭层] 接到业务指令，开始物理销毁底层关联数据, ParentID: {}", parentId);
+        // 删 ES 碎片
+        vectorStoreService.deleteChunksByParentId(indexName, parentId);
+        // 删 Redis 长文本
+        stringRedisTemplate.delete(LuminaConstants.PARENT_DOC_PREFIX + parentId);
+    }
 }

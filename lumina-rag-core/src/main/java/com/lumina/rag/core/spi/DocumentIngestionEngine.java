@@ -13,4 +13,6 @@ public interface DocumentIngestionEngine {
     String ingest(String sourceName, String text, String indexName);
 
     void deleteParentDoc(String oldParentId);
+
+    void removeDocument(String indexName, String oldParentId);
 }

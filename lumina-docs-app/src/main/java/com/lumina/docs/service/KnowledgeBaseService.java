@@ -103,8 +103,7 @@ public class KnowledgeBaseService {
         }
 
         // 2. 底层物理大清洗 (ES 碎片与 Redis 父文档)
-        vectorStoreService.deleteChunksByParentId(indexName, oldParentId);
-        documentIngestionEngine.deleteParentDoc(oldParentId);
+        documentIngestionEngine.removeDocument(indexName, oldParentId);
 
         // 3. 触发 Kafka 广播清理 AI 缓存
         log.info("业务层发送 Kafka 消息，通知全网清理 oldParentId: {} 的 AI 缓存", oldParentId);
