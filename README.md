@@ -54,8 +54,17 @@ Lumina 绝不将业务逻辑写死，框架提供丰富的 SPI 接口供开发�
 ### 1. 引入依赖 (基于 JitPack)
 在任何 Spring Boot 项目中引入：
 ```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
 <dependency>
-    <groupId>com.github.YourGithubName</groupId>
+    <!-- 多模块引用规范：groupId 为 github.用户名.仓库名 -->
+    <groupId>com.github.Gastertablook.lumina-framework</groupId>
+    <!-- artifactId 精准指定核心轮子模块 -->
     <artifactId>lumina-rag-core</artifactId>
     <version>v1.0.0</version>
 </dependency>
@@ -98,6 +107,51 @@ public SseEmitter chat(@RequestBody ChatRequest request) {
 ```
 **就这么简单！防并发、缓存拦截、Agent意图识别、长文溯源、流式打字机输出已在后台全自动运转！**
 
+### 4. 📚 核心 API 使用指南 (全生命周期闭环)
+
+Lumina 将极其复杂的底层机制封装为了三大核心黑盒 API。无论你在应用层使用什么数据库（MySQL/PostgreSQL），只需在业务逻辑中穿插调用以下 API，即可完成 AI 知识库的闭环：
+
+#### 场景一：文档安全摄入 (Ingestion)
+当你从 PDF/Word 中提取出纯文本后，调用此 API。Lumina 会在后台全自动完成：`自动切块 -> HNSW 向量化 -> 存入 Redis 父文档库 -> 存入 ES 碎片库 -> 建立安全血缘烙印`。
+```java
+@Autowired
+private DocumentIngestionEngine documentIngestionEngine;
+
+// 传入源文件名、纯文本内容、目标租户隔离空间(indexName)
+// 返回值 parentId：全局唯一血缘 ID，请务必将其存入你的 MySQL 业务表中！
+String parentId = documentIngestionEngine.ingest("2026年终总结.pdf", "这里是几万字的长文本...", "tenant_workspace_01");
+```
+
+#### 场景二：流式智能问答 (Agentic Chat)
+
+前台用户发起提问时，调用此 API。Lumina 将全自动接管：`Singleflight 并发拦截 -> L1/L2 多级语义缓存 -> Agent 意图拆解 -> 动态长短文溯源 -> 流式输出`。
+
+```java
+@Autowired
+private LuminaRagClient luminaRagClient;
+
+// sessionId 用于维持跨节点记忆，indexName 用于多租户隔离
+// 返回 SseEmitter，直接供前端 Vue/React 等进行流式打字机渲染
+SseEmitter emitter = luminaRagClient.chatStream(
+        "总结一下 2026 年的核心战略？", 
+        "user_session_1001", 
+        "tenant_workspace_01", 
+        new HashMap<>() // 附加的硬性元数据过滤条件
+);
+```
+
+#### 场景三：物理销毁与缓存一致性爆破 (Deletion & Cache GC)
+
+当业务系统中的文档被删除或更新时，必须调用此 API。Lumina 会极其冷酷地执行物理大清洗：`删除 ES 底层碎片 -> 删除 Redis 完整长文 -> 物理炸毁全网所有依赖过该文档的 L1/L2 AI 对话缓存`。彻底杜绝脏数据幻觉！
+
+```java
+@Autowired
+private DocumentIngestionEngine documentIngestionEngine;
+
+// 传入你要销毁的那个 parentId
+documentIngestionEngine.removeDocument("tenant_workspace_01", "doc_abcd123456789...");
+```
+
 ---
 
 ## 🗺️ 未来演进路线图 (Roadmap)
@@ -110,3 +164,6 @@ public SseEmitter chat(@RequestBody ChatRequest request) {
 
 ---
 > *Lumina: 把极致的复杂留给系统，把极致的优雅留给开发者。*
+
+
+
