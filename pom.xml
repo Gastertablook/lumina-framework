@@ -19,6 +19,7 @@
     <modules>
         <module>lumina-rag-core</module>
         <module>lumina-docs-app</module>
+        <module>lumina-mcp-server</module>
     </modules>
 
     <!-- 统一依赖管理 -->
