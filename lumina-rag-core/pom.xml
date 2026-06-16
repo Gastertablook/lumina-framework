@@ -75,6 +75,19 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-webmvc</artifactId>
         </dependency>
+
+        <!-- ================== 可观测性依赖 ================== -->
+        <!-- OpenTelemetry API（核心追踪 API，不绑定具体 exporter） -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+            <version>1.31.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-context</artifactId>
+            <version>1.31.0</version>
+        </dependency>
     </dependencies>
 
     <build>

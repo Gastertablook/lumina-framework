@@ -5,8 +5,11 @@ import com.lumina.rag.core.concurrent.RequestDeduplicator;
 import com.lumina.rag.core.constant.LuminaConstants;
 import com.lumina.rag.core.domain.DocumentChunk;
 import com.lumina.rag.core.spi.VectorStoreService;
+import com.lumina.rag.core.tracing.LuminaTracer;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Scope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -46,8 +49,28 @@ public class InformationRetrievalTool {
             "1. keyword 提取核心名词（空格分隔）；" +
             "2. needLongContext：如果问题需要宏观总结、对比分析，设为 true；如果是查找特定名字、数值等细节，设为 false。")
     public String retrieveInformation(String keyword, boolean needLongContext) {
-        log.info("[Agent 大脑决断] 触发底层数据检索工具，大模型提取的检索词为: [{}], 是否拉取巨型长文: [{}]", keyword, needLongContext);
+        // 【可观测性】创建追踪 Span
+        Span span = LuminaTracer.start("lumina.retrieve")
+                .setAttribute("keyword", keyword)
+                .setAttribute("needLongContext", String.valueOf(needLongContext))
+                .setAttribute("indexName", this.indexName);
+        try (Scope scope = span.makeCurrent()) {
+            log.info("[Agent 大脑决断] 触发底层数据检索工具，大模型提取的检索词为: [{}], 是否拉取巨型长文: [{}]", keyword, needLongContext);
 
+            String result = doRetrieve(keyword, needLongContext);
+            LuminaTracer.end(span);
+            return result;
+        } catch (Exception e) {
+            log.error("检索工具执行异常", e);
+            LuminaTracer.endWithError(span, e);
+            return "系统异常，无法检索。";
+        }
+    }
+
+    /**
+     * 实际的检索逻辑，抽成独立方法以便追踪 Span 统一管理生命周期
+     */
+    private String doRetrieve(String keyword, boolean needLongContext) {
         try {
             // 1. 向量化大模型提炼的关键词
             List<Float> queryVector = embeddingModel.embed(keyword).content().vectorAsList();
