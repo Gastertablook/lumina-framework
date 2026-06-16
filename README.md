@@ -1,58 +1,44 @@
-# 🌟 Lumina-RAG-Starter：企业级 Agentic RAG 核心引擎
+# 🌟 Lumina-RAG-Starter：次世代企业级 Agentic RAG 核心引擎
 
-![JDK](https://img.shields.io/badge/JDK-17+-green.svg) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-blue.svg) ![LangChain4j](https://img.shields.io/badge/LangChain4j-0.31.0-blue.svg) ![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)
+![JDK](https://img.shields.io/badge/JDK-17+-green.svg) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-blue.svg) ![LangChain4j](https://img.shields.io/badge/LangChain4j-0.31.0-blue.svg) ![Langfuse](https://img.shields.io/badge/LLMOps-Langfuse-purple.svg) ![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)
 
 Lumina 是一个专为**高并发、强一致性、低延迟**而生的企业级 Agentic RAG（检索增强智能体）Spring Boot Starter。
 
-它不仅仅是对大模型 API 的简单封装，而是将**分布式多级语义缓存、高并发防击穿护城河、动态长上下文溯源（Small-to-Big）**等大厂真实落地的底层架构封装为开箱即用的组件。只需引入一行依赖，即可为你的项目注入千万级架构的 AI 能力。
+它不仅仅是对大模型 API 的简单封装，而是将**工具级语义多级缓存、底层并发护城河、动态长上下文溯源（Small-to-Big）、OOP 级线程隔离与 LLMOps 可观测性**等大厂真实落地的底层架构，封装为开箱即用的组件。只需引入一行依赖，即可瞬间赋予你的项目百万级高可用 AI 架构！
 
 ---
 
-## ✨ 核心特性 (Core Features)
+## ✨ 核心硬核特性 (Core Features)
 
-### 1. 🧠 Agent 智能体大脑与动态路由 (Dynamic Routing)
-抛弃死板的 RAG 检索流水线。Lumina 内建 ReAct 模式的智能体大脑，支持纯正向 Prompt 约束，自动拆解意图：
-*   **意图自动分发**：自动识别用户的日常闲聊、基础算术与业务查询。闲聊走内部知识（0 消耗），业务查询精确路由至底层数据工具。
-*   **微观/宏观动态路由**：大模型自主决定是否拉取长文。若是细节问题，采用高精度切片（Short RAG）；若是总结问题，触发 `Small-to-Big`，瞬间从 Redis 拔出数万字完整源文档！
-*   **私有记忆漫游**：内置基于 Redis 的分布式聊天记忆（Chat Memory）机制，跨集群多节点部署也能保证用户多轮对话永不失忆。
+### 1. 🧠 Agent 智能体大脑与动态上下文路由 (Dynamic Context Routing)
+彻底抛弃死板的 RAG 检索流水线。Lumina 内建 ReAct 模式的智能体大脑，支持纯正向 Prompt 约束，自动拆解意图：
+- **微观/宏观动态路由**：大模型自主决定是否拉取长文。若是细节问题，采用高精度切片（Short RAG）；若是总结问题，触发 `Small-to-Big`，瞬间从 Redis 拔出数万字完整源文档！
+- **分布式私有记忆**：结合 Redis 聊天记忆存储，打造跨集群、多节点部署的无状态 (Stateless) 引擎，保证多轮对话永不失忆。
 
-### 2. ⚡ 毫秒级多级语义缓存引擎 (Multi-level Semantic Cache)
-大模型的生成速度和成本是企业落地的最大痛点。Lumina 构建了坚不可摧的缓存防线：
-*   **L1 极速内存拦截 (Redis)**：毫秒级响应完全相同的请求。
-*   **L2 语义防线 (Elasticsearch)**：基于 HNSW 稠密向量（384维）计算余弦相似度。即使提问措辞不同，只要语义一致（阈值 > 0.85），立刻拦截并返回底层客观数据。
-*   **租户级物理隔离**：缓存深植于 `@Tool` 层面，彻底杜绝多租户/多会话情况下的“身份泄露”与“串库”风险。
+### 2. ⚡ V8 级双引擎混合检索 (Hybrid Search)
+彻底解决传统检索召回率与准确率的矛盾：
+- **广义召回 + 精度定杀**：底层 Elasticsearch 采用**“BM25 词法广义召回” + “HNSW 稠密向量（384维）Painless 余弦相似度精度定杀”**。
+- **纯净实体抽取**：结合 Agent 提取的纯净实体 Keyword 检索，既防幻觉，又完美容忍自然语言的词汇鸿沟。
 
-### 3. 🛡️ 高并发护城河 (Singleflight Deduplication)
-应对双十一级别的高并发爆刷：内存级单例锁（Singleflight）保证在同一会话下，多个相同的并发请求只允许 1 个去调用昂贵的大模型 API，其余线程优雅挂起并共享先锋计算结果，彻底杜绝 API 计费黑洞与 Tomcat 线程池耗尽。
+### 3. 🛡️ 工具级防击穿护城河 (Tool-Level Singleflight) & 多级缓存
+业界首创将并发锁与缓存**下沉至 `@Tool` 级别**，彻底解放网关：
+- **防缓存击穿**：内建 Singleflight 内存级单例锁。万名用户同时并发相同问题，底层仅放行一个“先锋线程”去查 ES，其余线程优雅挂起并秒级共享客观结果，保护数据库免受海啸级 I/O 冲击。
+- **绝对的数据安全**：网关层 0 缓存，仅在 Tool 层缓存最纯净的客观真理（L1 Redis 7ms / L2 ES 50ms），从物理上彻底杜绝多租户大模型对话情况下的“隐私泄露”与“串库”风险。
 
-### 4. 🔍 动态长文档溯源 (Small-to-Big Retrieval)
-解决传统 RAG “切块导致语义断裂”的绝症：
-*   底层 ES 执行 高精度词法+向量检索，命中切块碎片。
-*   通过 `ParentID` 血缘追踪，瞬间从 Redis 拔出原属的数万字完整长文档，喂给大模型进行拥有“上帝视角”的长上下文推理。
+### 4. 🔒 基于 OOP 的绝对参数隔离 (Thread-Safe Isolation)
+在处理大模型异步网络回调时，传统的 `ThreadLocal` 极易引发上下文丢失。Lumina 采用**面向对象级作用域 (Request-Scoped Tool Instances)**，将 `indexName` (库名) 和权限过滤器直接封存在专属 Tool 实例中，穿透一切异步调用，保证多租户路由 100% 绝对物理安全！
 
-### 5. 🔗 分布式数据一致性与垃圾回收 (Cache Invalidation)
-在真实的 CMS 系统中修改或删除源文档时，只需发送单条 Kafka 消息，Lumina 底层立刻顺藤摸瓜，在全网所有节点**物理级炸毁**依赖了该文档的 L1/L2 缓存，永远告别 AI 提供脏数据的事故。
+### 5. 🔗 物理级数据一致性与 Kafka GC 闭环
+业务层更新/删除源文档时，发送单条 Kafka 消息，Lumina 底层立刻提取血缘 `ParentID`，在全网所有节点**精准、物理级炸毁**依赖该文档的 L1/L2 AI 问答缓存，永远告别“文档已删，AI 还在乱报旧数据”的脏读灾难。
 
-### 6. 🧩 极强的 SPI 扩展性 (Highly Extensible)
-Lumina 绝不将业务逻辑写死，框架提供丰富的 SPI 接口供开发者复写重构：
-*   `DocumentSplitterStrategy`：自定义文本切分策略（框架默认提供 `递归 500 字重叠切块`，业务方可自由复写为按法律条款、按 Markdown 标题、代码类/方法等方式切块）。
-*   `DocumentIngestionEngine`：自定义文档摄入黑盒引擎，可无缝对接 PDFBox、Apache POI 处理多模态文件。
-
----
-
-## 🎯 适用场景 (Use Cases)
-
-*   **企业内部智能知识库**：结合微服务架构，构建类似于 NotebookLM 的私有化文档交互平台。
-*   **智能电商导购**：将商品长图文和评价灌入系统，提供精准的商品对比与推荐。
-*   **医疗/法律研报分析**：利用系统的 Small-to-Big 特性，对几万字的法律合同和研报进行无损宏观总结。
-*   **等等**
+### 6. 👁️ 内建 LLMOps 级可观测性 (Langfuse Integration)
+拒绝 AI 黑盒！框架深度集成 Langfuse 监听器。大模型的每一次思考流转、工具调用的毫秒级耗时、输入输出的 Token 级计费，皆在云端后台生成完美的瀑布流甘特图（Trace），尽在掌控。
 
 ---
 
 ## 🚀 极速上手 (Quick Start)
 
-### 1. 引入依赖 (基于 JitPack)
-在任何 Spring Boot 项目中引入：
+### 1. 引入依赖
 ```xml
 <repositories>
     <repository>
@@ -62,9 +48,7 @@ Lumina 绝不将业务逻辑写死，框架提供丰富的 SPI 接口供开发�
 </repositories>
 
 <dependency>
-    <!-- 多模块引用规范：groupId 为 github.用户名.仓库名 -->
     <groupId>com.github.Gastertablook.lumina-framework</groupId>
-    <!-- artifactId 精准指定核心轮子模块 -->
     <artifactId>lumina-rag-core</artifactId>
     <version>v1.0.0</version>
 </dependency>
@@ -82,21 +66,20 @@ langchain4j:
   open-ai:
     streaming-chat-model:
       base-url: https://open.bigmodel.cn/api/paas/v4/
-      api-key: your-api-key-here # 支持任意兼容 OpenAI 协议的模型(如智谱、DeepSeek)
+      api-key: your-api-key-here # 支持兼容 OpenAI 协议的任意大模型
       model-name: glm-4-flash
       timeout: PT120S 
 ```
 
 ### 3. 一行代码呼叫神龙
-在你的 Controller 中注入 `LuminaRagClient`：
+在业务应用中直接注入 `LuminaRagClient`：
 ```java
 @Autowired
 private LuminaRagClient luminaRagClient;
 
 @PostMapping(value = "/stream", produces = "text/event-stream;charset=UTF-8")
 public SseEmitter chat(@RequestBody ChatRequest request) {
-    // request 包含 query, sessionId, indexName, metadataFilters
-    // 防并发、缓存拦截、Agent意图识别、长文溯源、流式输出已在后台全自动运转！
+    // 一行代码，防并发、多级缓存、Agent意图识别、长文溯源、流式输出全自动在后台运转！
     return luminaRagClient.chatStream(
             request.getQuery(), 
             request.getSessionId(), 
@@ -105,50 +88,27 @@ public SseEmitter chat(@RequestBody ChatRequest request) {
     );
 }
 ```
-**就这么简单！防并发、缓存拦截、Agent意图识别、长文溯源、流式打字机输出已在后台全自动运转！**
 
 ### 4. 📚 核心 API 使用指南 (全生命周期闭环)
 
-Lumina 将极其复杂的底层机制封装为了三大核心黑盒 API。无论你在应用层使用什么数据库（MySQL/PostgreSQL），只需在业务逻辑中穿插调用以下 API，即可完成 AI 知识库的闭环：
+Lumina 将极其复杂的底层机制封装为了三大核心 API。无论你在应用层使用什么数据库，只需调用以下 API 即可完成业务闭环：
 
 #### 场景一：文档安全摄入 (Ingestion)
-当你从 PDF/Word 中提取出纯文本后，调用此 API。Lumina 会在后台全自动完成：`自动切块 -> HNSW 向量化 -> 存入 Redis 父文档库 -> 存入 ES 碎片库 -> 建立安全血缘烙印`。
+当从物理文件中提取出文本后调用此 API。Lumina 后台全自动完成：`策略切块 -> 向量化 -> 存Redis父文档 -> 存ES碎片 -> 建立安全血缘烙印`。
 ```java
 @Autowired
 private DocumentIngestionEngine documentIngestionEngine;
 
-// 传入源文件名、纯文本内容、目标租户隔离空间(indexName)
 // 返回值 parentId：全局唯一血缘 ID，请务必将其存入你的 MySQL 业务表中！
-String parentId = documentIngestionEngine.ingest("2026年终总结.pdf", "这里是几万字的长文本...", "tenant_workspace_01");
+String parentId = documentIngestionEngine.ingest("年终总结.pdf", "长文本内容...", "tenant_workspace_01");
 ```
 
-#### 场景二：流式智能问答 (Agentic Chat)
-
-前台用户发起提问时，调用此 API。Lumina 将全自动接管：`Singleflight 并发拦截 -> L1/L2 多级语义缓存 -> Agent 意图拆解 -> 动态长短文溯源 -> 流式输出`。
-
-```java
-@Autowired
-private LuminaRagClient luminaRagClient;
-
-// sessionId 用于维持跨节点记忆，indexName 用于多租户隔离
-// 返回 SseEmitter，直接供前端 Vue/React 等进行流式打字机渲染
-SseEmitter emitter = luminaRagClient.chatStream(
-        "总结一下 2026 年的核心战略？", 
-        "user_session_1001", 
-        "tenant_workspace_01", 
-        new HashMap<>() // 附加的硬性元数据过滤条件
-);
-```
-
-#### 场景三：物理销毁与缓存一致性爆破 (Deletion & Cache GC)
-
-当业务系统中的文档被删除或更新时，必须调用此 API。Lumina 会极其冷酷地执行物理大清洗：`删除 ES 底层碎片 -> 删除 Redis 完整长文 -> 物理炸毁全网所有依赖过该文档的 L1/L2 AI 对话缓存`。彻底杜绝脏数据幻觉！
-
+#### 场景二：物理销毁与缓存一致性爆破 (Deletion & Cache GC)
+业务层文档被删除/更新时必须调用。Lumina 将极其冷酷地执行：`删除 ES 碎片 -> 删除 Redis 长文`。配合 Kafka 在应用层的广播，物理炸毁依赖过该文档的全网所有 L1/L2 缓存。
 ```java
 @Autowired
 private DocumentIngestionEngine documentIngestionEngine;
 
-// 传入你要销毁的那个 parentId
 documentIngestionEngine.removeDocument("tenant_workspace_01", "doc_abcd123456789...");
 ```
 
@@ -156,14 +116,12 @@ documentIngestionEngine.removeDocument("tenant_workspace_01", "doc_abcd123456789
 
 ## 🗺️ 未来演进路线图 (Roadmap)
 
-- [x] **Milestone 1-4**: 核心 RAG 引擎与 Agentic 架构封神。
-- [x] **Milestone 5**: CMS 业务闭环落地（包含 MySQL 真实落盘与 Apache PDFBox 多模态解析）。
-- [ ] **Milestone 6**: 接入 Anthropic Claude 等模型，实现框架级显式的 `Prompt Caching` 拦截器。
-- [ ] **Milestone 7**: 扩充 `@Tool` 生态库，引入 `WebSearchTool` 与 `Text2SQLTool`。
-- [ ] **Milestone 8**: 激活 `DocumentProvider` SPI 扩展点，全自动装配 Excel, PPT, Html 多模态粉碎机。
+- [x] **Milestone 1-4**: 核心 RAG 引擎、并发护城河与 Agentic 架构封神。
+- [x] **Milestone 5**: CMS 业务闭环落地（MySQL 真实落盘与 Apache PDFBox 多模态解析）。
+- [x] **Milestone 6**: 接入 Langfuse LLMOps，点亮 Agent 思考链路可观测性天眼。
+- [ ] **Milestone 7**: 协议升维，封装 MCP (Model Context Protocol) 标准 Server 微服务生态插座。
+- [ ] **Milestone 8**: 重塑大脑，引入 LangGraph 状态机编排，实现复杂反思（Self-Reflection）工作流。
+- [ ] **Milestone 9**: 激活 `DocumentProvider` SPI 扩展点，全自动装配 Excel, PPT, Html 多模态粉碎机。
 
 ---
-> *Lumina: 把极致的复杂留给系统，把极致的优雅留给开发者。*
-
-
-
+> *Lumina: 旨在把极致的系统复杂度留在框架内，把极致的优雅留给业务开发者。*

@@ -1,6 +1,7 @@
 package com.lumina.rag.core.agent;
 
 import com.lumina.rag.core.cache.SemanticCacheManager;
+import com.lumina.rag.core.concurrent.RequestDeduplicator;
 import com.lumina.rag.core.constant.LuminaConstants;
 import com.lumina.rag.core.domain.DocumentChunk;
 import com.lumina.rag.core.spi.VectorStoreService;
@@ -9,7 +10,9 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.util.DigestUtils;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +30,8 @@ public class InformationRetrievalTool {
     private final EmbeddingModel embeddingModel;
     private final StringRedisTemplate stringRedisTemplate;
     private final SemanticCacheManager cacheManager;
+    //底层物理防线控制器
+    private final RequestDeduplicator deduplicator;
 
     // 当前请求独占的参数
     private final String indexName;
@@ -58,54 +63,73 @@ public class InformationRetrievalTool {
                 return cachedContext;
             }
 
-            // 2. 缓存未命中，执行精准混合检索
-            List<DocumentChunk> chunks = vectorStoreService.hybridSearch(
-                    indexName, keyword, queryVector, this.filters, 3);
-
-            if (chunks == null || chunks.isEmpty()) {
-                return "【系统警告】：底层数据引擎未检索到任何信息！你必须立刻停止作答，并原封不动地向用户回复：‘抱歉，当前私有数据空间中没有关于此问题的记载。’ ";
-            }
-
             // ==========================================
-            // 【Small-to-Big 长上下文溯源】
+            // 2. 【终极护城河：Tool 级 Singleflight】
+            // 跨用户的海量相同检索请求，在这里被强制截停！
+            // Key：库名 + 关键词 MD5（保证纯粹的客观检索去重）
             // ==========================================
-            Set<String> parentIds = chunks.stream()
-                    .map(chunk -> (String) chunk.getMetadata().get(LuminaConstants.FIELD_PARENT_ID))
-                    .filter(java.util.Objects::nonNull)
-                    .collect(Collectors.toSet());
+            String deduplicationKey = "tool_retrieval:" + this.indexName + ":" + DigestUtils.md5DigestAsHex(keyword.getBytes(StandardCharsets.UTF_8));
 
-            // 直接把血缘写入肚子里的 List，外面的网关无缝读取！
-            if (parentIds.isEmpty()) {
-                this.refDocIds.addAll(chunks.stream().map(DocumentChunk::getChunkId).collect(Collectors.toList()));
-            } else {
-                this.refDocIds.addAll(parentIds);
-            }
-
-            // 3. Small-to-Big 组装上下文
-            String retrievedData;
-            if (needLongContext && !parentIds.isEmpty()) {
-                log.info("[Agent 工具] 触发 Small-to-Big 溯源...");
-                List<String> parentTexts = new java.util.ArrayList<>();
-                for (String pid : parentIds) {
-                    String parentDoc = stringRedisTemplate.opsForValue().get(LuminaConstants.PARENT_DOC_PREFIX + pid);
-                    if (parentDoc != null) {
-                        parentTexts.add(parentDoc);
-                    }
+            return deduplicator.execute(deduplicationKey, () -> {
+                // 3. 【双重检查锁 (Double-Check)】
+                // 当跟随者被唤醒后，先锋大概率已经把缓存写好了，必须再查一次，防止击穿底层！
+                String doubleCheckCache = cacheManager.getCache(this.indexName, keyword, queryVector);
+                if (doubleCheckCache != null) {
+                    log.info("[工具级护城河] 跟随者苏醒，成功复用先锋写入的缓存数据！");
+                    return doubleCheckCache;
                 }
-                retrievedData = String.join("\n\n---\n\n", parentTexts);
-                log.info("[Agent 工具] 成功提取 {} 字的巨量参考资料供大脑分析！", retrievedData.length());
-            } else {
-                log.info("[Agent 工具] 大模型判定为细节问题，仅使用高精度碎片 (Short RAG)...");
-                retrievedData = chunks.stream().map(DocumentChunk::getText).collect(Collectors.joining("\n---\n"));
-            }
 
-            // ==========================================
-            // 【写入工具级缓存】
-            // 将纯粹的“事实上下文”写入缓存！
-            // ==========================================
-            cacheManager.putCache(this.indexName, keyword, queryVector, retrievedData, this.refDocIds);
+                log.info("[工具级护城河] 先锋线程出击！执行真实的 ES 检索与长文溯源！");
 
-            return retrievedData ;
+                // 4. 缓存未命中，执行精准混合检索
+                List<DocumentChunk> chunks = vectorStoreService.hybridSearch(
+                        indexName, keyword, queryVector, this.filters, 3);
+
+                if (chunks == null || chunks.isEmpty()) {
+                    return "【系统警告】：底层数据引擎未检索到任何信息！你必须立刻停止作答，并原封不动地向用户回复：‘抱歉，当前私有数据空间中没有关于此问题的记载。’ ";
+                }
+
+                // ==========================================
+                // 【Small-to-Big 长上下文溯源】
+                // ==========================================
+                Set<String> parentIds = chunks.stream()
+                        .map(chunk -> (String) chunk.getMetadata().get(LuminaConstants.FIELD_PARENT_ID))
+                        .filter(java.util.Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+                // 直接把血缘写入肚子里的 List，外面的网关无缝读取！
+                if (parentIds.isEmpty()) {
+                    this.refDocIds.addAll(chunks.stream().map(DocumentChunk::getChunkId).collect(Collectors.toList()));
+                } else {
+                    this.refDocIds.addAll(parentIds);
+                }
+
+                // Small-to-Big 组装上下文
+                String retrievedData;
+                if (needLongContext && !parentIds.isEmpty()) {
+                    log.info("[Agent 工具] 触发 Small-to-Big 溯源...");
+                    List<String> parentTexts = new java.util.ArrayList<>();
+                    for (String pid : parentIds) {
+                        String parentDoc = stringRedisTemplate.opsForValue().get(LuminaConstants.PARENT_DOC_PREFIX + pid);
+                        if (parentDoc != null) {
+                            parentTexts.add(parentDoc);
+                        }
+                    }
+                    retrievedData = String.join("\n\n---\n\n", parentTexts);
+                    log.info("[Agent 工具] 成功提取 {} 字的巨量参考资料供大脑分析！", retrievedData.length());
+                } else {
+                    log.info("[Agent 工具] 大模型判定为细节问题，仅使用高精度碎片 (Short RAG)...");
+                    retrievedData = chunks.stream().map(DocumentChunk::getText).collect(Collectors.joining("\n---\n"));
+                }
+
+                // ==========================================
+                // 【写入工具级缓存】
+                // 将纯粹的“事实上下文”写入缓存！
+                // ==========================================
+                cacheManager.putCache(this.indexName, keyword, queryVector, retrievedData, this.refDocIds);
+
+                return retrievedData ;
+            });
         } catch (Exception e) {
             log.error("检索工具执行异常", e);
             return "系统异常，无法检索。";
