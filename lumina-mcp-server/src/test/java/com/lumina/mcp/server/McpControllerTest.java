@@ -7,47 +7,55 @@ import com.lumina.mcp.server.tool.LuminaMcpToolRegistry;
 import com.lumina.rag.core.cache.SemanticCacheManager;
 import com.lumina.rag.core.concurrent.RequestDeduplicator;
 import com.lumina.rag.core.spi.VectorStoreService;
-import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * MCP Controller 单元测试
+ * MCP Controller 纯单元测试
+ *
+ * 使用 MockMvcBuilders.standaloneSetup 直接构造 McpController，
+ * 不加载任何 Spring 上下文，完全不依赖外部基础设施。
  */
-@WebMvcTest(McpController.class)
+@ExtendWith(MockitoExtension.class)
 class McpControllerTest {
 
-    @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
     private ObjectMapper objectMapper;
 
-    // ==================== McpController + RAG Core 依赖 ====================
-    @MockBean
+    @Mock
     private VectorStoreService vectorStoreService;
-    @MockBean
-    private StreamingChatLanguageModel streamingChatLanguageModel;
-    @MockBean
+    @Mock
     private EmbeddingModel embeddingModel;
-    @MockBean
+    @Mock
     private StringRedisTemplate stringRedisTemplate;
-    @MockBean
+    @Mock
     private SemanticCacheManager cacheManager;
-    @MockBean
+    @Mock
     private RequestDeduplicator deduplicator;
-    @MockBean
+    @Mock
     private LuminaMcpToolRegistry toolRegistry;
+
+    @BeforeEach
+    void setUp() {
+        objectMapper = new ObjectMapper();
+        McpController controller = new McpController(
+                vectorStoreService, embeddingModel, stringRedisTemplate,
+                cacheManager, deduplicator, toolRegistry, objectMapper
+        );
+        mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+    }
 
     @Test
     @DisplayName("server/info 应返回服务器信息")

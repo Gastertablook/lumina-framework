@@ -7,7 +7,6 @@ import com.lumina.rag.core.concurrent.RequestDeduplicator;
 import com.lumina.rag.core.config.LuminaAsyncConfig;
 import com.lumina.rag.core.spi.LuminaRagClient;
 import com.lumina.rag.core.spi.VectorStoreService;
-import com.lumina.rag.core.tracing.LuminaTracer;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -70,14 +69,8 @@ public class LuminaRagClientImpl implements LuminaRagClient {
 
     @Override
     public SseEmitter chatStream(String query, String sessionId, String indexName, Map<String, Object> metadataFilters) {
-        // 【可观测性】创建对话追踪 Span
-        Span chatSpan = LuminaTracer.start("lumina.chat")
-                .setAttribute("query", query != null ? query : "")
-                .setAttribute("sessionId", sessionId != null ? sessionId : "")
-                .setAttribute("indexName", indexName != null ? indexName : "");
-        try (Scope scope = chatSpan.makeCurrent()) {
-            // 创建 SSE 发射器 (超时设为 0，防止大模型思考过久断开)
-            SseEmitter emitter = new SseEmitter(0L);
+        // 创建 SSE 发射器 (超时设为 0，防止大模型思考过久断开)
+        SseEmitter emitter = new SseEmitter(0L);
 
         // 注意：这里由于 SSE 是异步流式的，传统的 CompletableFuture 阻塞式防击穿需要变种。
         // 【架构红线】：必须在这里异步！保证 Tomcat 线程立刻释放，将阻塞风险转移至专属池去跑检索和推流。
@@ -111,18 +104,12 @@ public class LuminaRagClientImpl implements LuminaRagClient {
                             try {
                                 emitter.send(SseEmitter.event().name("DONE").data("[DONE]"));
                                 emitter.complete();
-                                LuminaTracer.event(chatSpan, "chat.complete");
-                                LuminaTracer.end(chatSpan);
                             } catch (Exception e) {}
                         })
-                        .onError(error -> {
-                            emitter.completeWithError(error);
-                            LuminaTracer.endWithError(chatSpan, error);
-                        })
+                        .onError(error -> emitter.completeWithError(error))
                         .start();
             } catch (Exception e) {
                 log.error("RAG Agent 异步流式处理异常", e);
-                LuminaTracer.endWithError(chatSpan, e);
                 emitter.completeWithError(e);
             }
             // 关键：指定了我们自己的线程池！
