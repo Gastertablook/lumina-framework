@@ -39,3 +39,11 @@ build/
 
 # Sensitive configuration file
 lumina-docs-app/src/main/resources/application.yml
+
+# Dev & teaching docs (local only)
+ARCHITECTURE.md
+DEBUG_GUIDE.md
+NEXT_STEPS.md
+PROGRESS.md
+TEACHING.md
+TEST_PLAN.md

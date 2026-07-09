@@ -1,10 +1,10 @@
 # 🌟 Lumina-RAG-Starter：次世代企业级 Agentic RAG 核心引擎
 
-![JDK](https://img.shields.io/badge/JDK-17+-green.svg) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-blue.svg) ![LangChain4j](https://img.shields.io/badge/LangChain4j-0.31.0-blue.svg) ![Langfuse](https://img.shields.io/badge/LLMOps-Langfuse-purple.svg) ![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)
+![JDK](https://img.shields.io/badge/JDK-17+-green.svg) ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-blue.svg) ![LangChain4j](https://img.shields.io/badge/LangChain4j-0.31.0-blue.svg) ![MCP](https://img.shields.io/badge/Protocol-MCP-orange.svg) ![LangGraph](https://img.shields.io/badge/Workflow-LangGraph-red.svg) ![Langfuse](https://img.shields.io/badge/LLMOps-Langfuse-purple.svg) ![License](https://img.shields.io/badge/License-Apache%202.0-orange.svg)
 
 Lumina 是一个专为**高并发、强一致性、低延迟**而生的企业级 Agentic RAG（检索增强智能体）Spring Boot Starter。
 
-它不仅仅是对大模型 API 的简单封装，而是将**工具级语义多级缓存、底层并发护城河、动态长上下文溯源（Small-to-Big）、OOP 级线程隔离与 LLMOps 可观测性**等大厂真实落地的底层架构，封装为开箱即用的组件。只需引入一行依赖，即可瞬间赋予你的项目百万级高可用 AI 架构！
+它不仅仅是对大模型 API 的简单封装，而是将**工具级语义多级缓存、底层并发护城河、动态长上下文溯源（Small-to-Big）、MCP 标准化协议、LangGraph 状态机工作流编排与 OpenTelemetry 全链路可观测性**等大厂真实落地的底层架构，封装为开箱即用的组件。只需引入一行依赖，即可瞬间赋予你的项目百万级高可用 AI 架构！
 
 ---
 
@@ -33,6 +33,12 @@ Lumina 是一个专为**高并发、强一致性、低延迟**而生的企业级
 
 ### 6. 👁️ 内建 LLMOps 级可观测性 (Langfuse Integration)
 拒绝 AI 黑盒！框架深度集成 Langfuse 监听器。大模型的每一次思考流转、工具调用的毫秒级耗时、输入输出的 Token 级计费，皆在云端后台生成完美的瀑布流甘特图（Trace），尽在掌控。
+
+### 7. 🔌 MCP 标准化协议 (Model Context Protocol)
+告别碎片化集成！Lumina 内建 MCP Server 微服务，基于 **SSE 长连接 + JSON-RPC 2.0** 标准传输层，将 RAG 检索能力标准化暴露为可发现工具接口。Claude Desktop、Claude Code 等 MCP 客户端可零配置动态发现并调用知识库检索能力，实现 AI 助手与底层数据引擎的解耦集成。
+
+### 8. 🧩 LangGraph 状态机工作流编排 (Stateful Workflow Engine)
+超越单次检索！Lumina 自研轻量级 **LangGraph 有状态图引擎**，将意图分类、关键词提取、知识库检索与答案生成建模为 **Node-Edge 有向图工作流**。支持条件路由与多步推理的动态编排，将简单的 "检索→回答" 升级为可编排的 **Agentic 多步推理流水线**，且每一步的状态变化均可追踪、可调试。
 
 ---
 
@@ -119,8 +125,8 @@ documentIngestionEngine.removeDocument("tenant_workspace_01", "doc_abcd123456789
 - [x] **Milestone 1-4**: 核心 RAG 引擎、并发护城河与 Agentic 架构封神。
 - [x] **Milestone 5**: CMS 业务闭环落地（MySQL 真实落盘与 Apache PDFBox 多模态解析）。
 - [x] **Milestone 6**: 接入 Langfuse LLMOps，点亮 Agent 思考链路可观测性天眼。
-- [ ] **Milestone 7**: 协议升维，封装 MCP (Model Context Protocol) 标准 Server 微服务生态插座。
-- [ ] **Milestone 8**: 重塑大脑，引入 LangGraph 状态机编排，实现复杂反思（Self-Reflection）工作流。
+- [x] **Milestone 7**: 协议升维，封装 MCP (Model Context Protocol) 标准 Server 微服务生态插座。
+- [x] **Milestone 8**: 重塑大脑，引入 LangGraph 状态机编排，实现复杂反思（Self-Reflection）工作流。
 - [ ] **Milestone 9**: 激活 `DocumentProvider` SPI 扩展点，全自动装配 Excel, PPT, Html 多模态粉碎机。
 
 ---
